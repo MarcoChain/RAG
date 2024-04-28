@@ -5,29 +5,50 @@ import pandas as pd
 import re
 import time
 import numpy as np
-from sentence_transformers import util, SentenceTransformer
+import arxiv
+
+from sentence_transformers import SentenceTransformer
 from sentence_transformers import CrossEncoder
 from tqdm.auto import tqdm
 from spacy.lang.en import English
 from vector_server import FaissKNNSearch
-
-num_sentence_chunk_size = 10
+from os import listdir
+from os.path import isfile, join
+from typing import List
 
 def split_list(
-    input_list: list[str],
-    slice_size: int=num_sentence_chunk_size
-    ) -> list[list[str]]:
+    input_list: List[str],
+    slice_size: int=10
+    ) -> List[List[str]]:
   return [input_list[i:i + slice_size] for i in range(0, len(input_list), slice_size)]
 
+def download_pdfs_from_arxiv(
+        topic:str,
+        data_path: str,
+        num_results:int = 10
+):
+    client = arxiv.Client()
+    search = arxiv.Search(
+    query = topic,
+    max_results = num_results,
+    sort_by = arxiv.SortCriterion.SubmittedDate
+    )
+
+    results = client.results(search)
+    os.makedirs(data_path, exist_ok=True)
+    print(f"[INFO] Downloading from arxiv...")
+    for paper in tqdm(results):
+        paper.download_pdf(data_path)
+
+    
 def download_single_pdf(
     url:str,
     data_path: str
-) -> str:
+):
     pdf_path = os.path.join(data_path, "file.pdf")
     if not os.path.exists(pdf_path):
         print("[INFO] File doesn't exist, downloading...")
         os.makedirs(data_path, exist_ok=True)
-        url = "https://pressbooks.oer.hawaii.edu/humannutrition2/open/download?type=pdf"
 
         response = requests.get(url)
         if response.status_code == 200:
@@ -38,9 +59,7 @@ def download_single_pdf(
         else:
             raise Exception(f"[ERROR] Failed to download the file. Status code: {response.status_code}")
     else:
-        print(f"[INFO] using file {pdf_path}")
-    
-    return pdf_path
+        print(f"[INFO] file {pdf_path} already exists")
 
 def text_formatter(
     text: str
@@ -51,29 +70,37 @@ def text_formatter(
   return cleaned_text
 
 def split_list(
-    input_list: list[str],
+    input_list: List[str],
     slice_size: int
-    ) -> list[list[str]]:
+    ) -> List[List[str]]:
   return [input_list[i:i + slice_size] for i in range(0, len(input_list), slice_size)]
 
-def open_and_read_pdf(
-    pdf_path: str,
-) -> list[dict]:
-  doc = fitz.open(pdf_path)
+def open_and_read_pdfs(
+    data_path: str,
+) -> List[dict]:
+
+  pdf_files = [join(data_path, f) for f in listdir(data_path) if isfile(join(data_path, f))]
   pages_and_texts = []
 
-  for page in doc:
-    text = page.get_text()
-    text = text_formatter(text)
+  for pdf_path in pdf_files:
+    if pdf_path.split(".")[-1] != "pdf":
+        raise Exception(f"[ERROR] Found file {pdf_path} which is not a pdf")
+      
+    doc = fitz.open(pdf_path)
+    
+    for page in doc:
+        text = page.get_text()
+        text = text_formatter(text)
 
-    pages_and_texts.append({
-        "page_number": page.number,
-        "page_chat_count": len(text),
-        "page_word_count": len(text.split(" ")),
-        "page_sentence_count_raw": len(text.split(". ")),
-        "page_token_count": len(text)/4,
-        "text": text
-    })
+        pages_and_texts.append({
+            "pdf_file": pdf_path,
+            "page_number": page.number,
+            "page_chat_count": len(text),
+            "page_word_count": len(text.split(" ")),
+            "page_sentence_count_raw": len(text.split(". ")),
+            "page_token_count": len(text)/4,
+            "text": text
+        })
   return pages_and_texts
 
 def prepare_text(
@@ -117,7 +144,6 @@ def prepare_text(
 
     print("[INFO] Some statistics about your pdf:")
     df = pd.DataFrame(pages_and_chunks)
-    print(df.describe().round(2))
     pages_and_chunks_over_min_token_len = df[df["chunk_token_count"] > min_token_length].to_dict(orient = "records")
     return pages_and_chunks_over_min_token_len
 
@@ -125,19 +151,19 @@ def create_and_store_embeddings(
     pages_and_chunks_over_min_token_len:pd.DataFrame,
     embedding_model_name:str,
     batch_size:int,
-    dest_path:str,
+    csv_path:str,
     top_k_context:int,
     device:str = "cpu"
-) -> [FaissKNNSearch, SentenceTransformer]:
+) -> (FaissKNNSearch, SentenceTransformer):
 
-    dest_path = os.path.join(dest_path, "text_chunks_and_embeddings_df.csv")
+    data_path = join(csv_path, "text_chunks_and_embeddings_df.csv")
     print(f"[INFO] Loading {embedding_model_name} model on {device}...")
     embedding_model = SentenceTransformer(
         model_name_or_path = embedding_model_name,
         device = device
     ).to(device)
 
-    if not os.path.exists(dest_path):
+    if not os.path.exists(data_path):
         
         print("[INFO] Embedding creation started...")
         start_time=time.time()
@@ -153,25 +179,25 @@ def create_and_store_embeddings(
             item["embedding"] = vector
         text_chunks_and_emnbeding_df = pd.DataFrame(pages_and_chunks_over_min_token_len)
         print("[INFO] Saving embeddings...")
-        text_chunks_and_emnbeding_df.to_csv(dest_path, index=False)
-        print(f"[INFO] Embedding stored at: {dest_path}")
+        text_chunks_and_emnbeding_df.to_csv(data_path, index=False)
+        print(f"[INFO] Embedding stored at: {data_path}")
     else:
-        print(f"[INFO] File {dest_path} alerady exists, loading it...")
+        print(f"[INFO] File {data_path} alerady exists, loading it...")
 
-    data = pd.read_csv(dest_path)
+    data = pd.read_csv(data_path)
     embeddings = data["embedding"].apply(lambda x: np.fromstring(x.strip("[]"), sep="  ").astype(np.float32))
     embeddings = np.stack(embeddings)
 
     print("[INFO] Creating faiss dataset...")
     
     faiss_dataset = FaissKNNSearch(
-        k=top_k_context,
+        k=top_k_context * 3,
         device=device
     )
     faiss_dataset.fit(
         embeddings = embeddings,
-        text = data["sentence_chunk"],
-        pages = data["page_number"]
+        text = data["sentence_chunk"].to_numpy(),
+        pages = data["page_number"].to_numpy()
     )
 
     return faiss_dataset, embedding_model
@@ -192,9 +218,21 @@ def retrieve_topk_results(
     faiss_dataset:FaissKNNSearch,
     embedding_model:SentenceTransformer,
     re_ranking_model:CrossEncoder,
-    top_k_context:int,
-    device:str = "cpu"
-):
+    top_k_context:int
+) -> (np.array, np.array):
+    
     query_embedding = embedding_model.encode(query, convert_to_tensor = True).detach().cpu().view(1, -1).numpy()
-    indices, text, pages = faiss_dataset.retrieve(query_embedding)
-    print(text)
+    _, text, pages = faiss_dataset.retrieve(query_embedding)
+
+    re_ranked_result = re_ranking_model.rank(
+        query,
+        text,
+        top_k=top_k_context
+    )
+
+    idx = pd.DataFrame(re_ranked_result)["corpus_id"].to_numpy()
+    selected_text = text[idx]
+    selected_pages = pages[idx]
+
+    return selected_text, selected_pages
+    

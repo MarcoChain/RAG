@@ -5,3 +5,7 @@ numpy
 spacy
 torch==2.2.1
 sentence-transformers
+transformers
+bitsandbytes
+accelerate
+arxiv

@@ -1,17 +1,25 @@
 from utils import (
     download_single_pdf, 
+    download_pdfs_from_arxiv,
     prepare_text,
-    open_and_read_pdf,
+    open_and_read_pdfs,
     create_and_store_embeddings,
     loading_re_ranking_model,
-    retrieve_topk_results
+    retrieve_topk_results,
+)
+
+from llm_utils import(
+    get_device,
+    clean_memory,
+    load_llm,
+    generate_reply
 )
 
 import argparse
-import torch
 
 def __pars_args__():
     parser = argparse.ArgumentParser(description='RAG')
+
     parser.add_argument(
         '--url', 
         type=str, 
@@ -24,6 +32,13 @@ def __pars_args__():
         type=str, 
         default="./data", 
         help='Path where to download the data (Default ./data)'
+    )
+
+    parser.add_argument(
+        '--csv_path', 
+        type=str, 
+        default="./csv", 
+        help='Path where to download the csv (Default ./csv)'
     )
 
     parser.add_argument(
@@ -55,6 +70,13 @@ def __pars_args__():
     )
 
     parser.add_argument(
+        '--llm_model_name', 
+        type=str, 
+        default="google/gemma-1.1-2b-it", 
+        help='LLM used for generation step (Default google/gemma-1.1-2b-it)'
+    )
+
+    parser.add_argument(
         '--batch_size', 
         type=int, 
         default=128, 
@@ -67,20 +89,49 @@ def __pars_args__():
         default=5, 
         help='Number of items used as context by the LLM (Default 5)'
     )
-    
 
-    parser.add_argument('--task_id', type=int, default=20, help="Task to execute.")
-    return parser.parse_args()
-
-def main(args):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    pdf_path = download_single_pdf(
-        url = args.url,
-        data_path = args.data_path
+    parser.add_argument(
+        '--token', 
+        type=str, 
+        default=None, 
+        help='Hugging face token needed to download models (Default None)'
     )
 
-    pages_and_texts = open_and_read_pdf(
-        pdf_path = pdf_path,
+    parser.add_argument(
+        '--num_results', 
+        type=int, 
+        default=10, 
+        help='Number of papers to download from arvix. Valid only if URL is None (Default 10)'
+    )
+    
+    args = parser.parse_args()
+    print("".join(["-"]*10), "\n")
+    for argument, val in vars(args).items():
+        print(argument, "\t", val)
+    print("".join(["-"]*10), "\n")
+    return args
+    
+
+def main(args):
+    device, attn_implementation, quantization_config = get_device()
+    
+    if (args.url == "") or (args.url is None):
+        print("Insert argument: ")
+        topic = input()
+        download_pdfs_from_arxiv(
+            topic = topic,
+            data_path = args.data_path,
+            num_results = args.num_results
+        )
+    else:
+        download_single_pdf(
+            url = args.url,
+            data_path = args.data_path
+        )
+        
+
+    pages_and_texts = open_and_read_pdfs(
+        data_path = args.data_path,
     )
 
     pages_and_chunks_over_min_token_len = prepare_text(
@@ -93,7 +144,7 @@ def main(args):
         pages_and_chunks_over_min_token_len = pages_and_chunks_over_min_token_len,
         embedding_model_name = args.embedding_model_name,
         batch_size = args.batch_size,
-        dest_path = args.data_path,
+        csv_path = args.csv_path,
         top_k_context = args.top_k_context,
         device = device
     )
@@ -103,17 +154,40 @@ def main(args):
         device = device
     )
 
+    tokenizer, llm_model = load_llm(
+        llm_model_name = args.llm_model_name,
+        attn_implementation = attn_implementation,
+        quantization_config = quantization_config,
+        token = args.token,
+        device = device
+    )
+
+
     while True:
         print("Insert query:")
         query = input()
         if query == "quit program":
             break
-        retrieve_topk_results(
+        selected_text, selected_pages = retrieve_topk_results(
             query = query,
             faiss_dataset = faiss_dataset,
             embedding_model = embedding_model,
             re_ranking_model = re_ranking_model,
-            top_k_context = args.top_k_context,
+            top_k_context = args.top_k_context
+        )
+
+        outputs_decoded = generate_reply(
+            llm_model = llm_model,
+            tokenizer = tokenizer,
+            query = query,
+            selected_text = selected_text,
+            selected_pages = selected_pages,
+            device = device
+        )
+
+        print(f"{outputs_decoded}")
+
+        clean_memory(
             device = device
         )
 
