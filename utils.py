@@ -22,6 +22,11 @@ def split_list(
     ) -> List[List[str]]:
   return [input_list[i:i + slice_size] for i in range(0, len(input_list), slice_size)]
 
+def check_pdfs_presence(
+        data_path:str
+) -> bool:
+    return (os.path.isdir(data_path)) and (len(listdir(data_path))>0)
+
 def download_pdfs_from_arxiv(
         topic:str,
         data_path: str,
@@ -45,10 +50,10 @@ def download_single_pdf(
     url:str,
     data_path: str
 ):
-    pdf_path = os.path.join(data_path, "file.pdf")
+    pdf_path = join(data_path, "file.pdf")
     if not os.path.exists(pdf_path):
         print("[INFO] File doesn't exist, downloading...")
-        os.makedirs(data_path, exist_ok=True)
+        os.makedir(data_path, exist_ok=True)
 
         response = requests.get(url)
         if response.status_code == 200:
@@ -155,7 +160,8 @@ def create_and_store_embeddings(
     top_k_context:int,
     device:str = "cpu"
 ) -> (FaissKNNSearch, SentenceTransformer):
-
+    
+    os.makedirs(csv_path, exist_ok=True)
     data_path = join(csv_path, "text_chunks_and_embeddings_df.csv")
     print(f"[INFO] Loading {embedding_model_name} model on {device}...")
     embedding_model = SentenceTransformer(

@@ -1,4 +1,5 @@
 from utils import (
+    check_pdfs_presence,
     download_single_pdf, 
     download_pdfs_from_arxiv,
     prepare_text,
@@ -23,8 +24,8 @@ def __pars_args__():
     parser.add_argument(
         '--url', 
         type=str, 
-        default="https://pressbooks.oer.hawaii.edu/humannutrition2/open/download?type=pdf", 
-        help='Url to download the pdf file (Default Hawaii pressbook book url)'
+        default=None, 
+        help='Url to download the pdf file (Default None)'
     )
 
     parser.add_argument(
@@ -114,8 +115,9 @@ def __pars_args__():
 
 def main(args):
     device, attn_implementation, quantization_config = get_device()
-    
-    if (args.url == "") or (args.url is None):
+    if check_pdfs_presence(args.data_path):
+        print(f"[INFO] Files in {args.data_path} found, skipping download step...")
+    elif(args.url is None):
         print("Insert argument: ")
         topic = input()
         download_pdfs_from_arxiv(
