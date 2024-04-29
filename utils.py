@@ -53,7 +53,7 @@ def download_single_pdf(
     pdf_path = join(data_path, "file.pdf")
     if not os.path.exists(pdf_path):
         print("[INFO] File doesn't exist, downloading...")
-        os.makedir(data_path, exist_ok=True)
+        os.makedirs(data_path, exist_ok=True)
 
         response = requests.get(url)
         if response.status_code == 200:
@@ -147,7 +147,6 @@ def prepare_text(
             chunk_dict["chunk_word_count"] = len(joined_senteced_chunk.split(" "))
             pages_and_chunks.append(chunk_dict)
 
-    print("[INFO] Some statistics about your pdf:")
     df = pd.DataFrame(pages_and_chunks)
     pages_and_chunks_over_min_token_len = df[df["chunk_token_count"] > min_token_length].to_dict(orient = "records")
     return pages_and_chunks_over_min_token_len
@@ -167,7 +166,7 @@ def create_and_store_embeddings(
     embedding_model = SentenceTransformer(
         model_name_or_path = embedding_model_name,
         device = device
-    ).to(device)
+    )
 
     if not os.path.exists(data_path):
         
@@ -185,7 +184,7 @@ def create_and_store_embeddings(
             item["embedding"] = vector
         text_chunks_and_emnbeding_df = pd.DataFrame(pages_and_chunks_over_min_token_len)
         print("[INFO] Saving embeddings...")
-        text_chunks_and_emnbeding_df.to_csv(data_path, index=False)
+        text_chunks_and_emnbeding_df.to_csv(data_path, index=False, escapechar="\\")
         print(f"[INFO] Embedding stored at: {data_path}")
     else:
         print(f"[INFO] File {data_path} alerady exists, loading it...")

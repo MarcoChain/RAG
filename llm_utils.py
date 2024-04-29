@@ -15,6 +15,7 @@ def clean_memory(
 def load_llm(
         llm_model_name:str,
         attn_implementation:str,
+        low_cpu_mem_usage:bool,
         quantization_config:BitsAndBytesConfig = None,
         token:str = None,
         device:str = "cpu"
@@ -29,17 +30,17 @@ def load_llm(
         llm_model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path = llm_model_name,
             token = token,
-            low_cpu_mem_usage = False,
+            low_cpu_mem_usage = low_cpu_mem_usage,
             attn_implementation = attn_implementation,
             quantization_config = quantization_config
-        ).to(device)
+        )
     else: 
         llm_model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path = llm_model_name,
             token = token,
-            low_cpu_mem_usage = False,
+            low_cpu_mem_usage = low_cpu_mem_usage,
             attn_implementation = attn_implementation,
-        ).to(device)
+        )
 
     num_params = sum([param.numel() for param in llm_model.parameters()])
     mem_params = sum([param.numel() * param.element_size() for param in llm_model.parameters()])
@@ -48,7 +49,7 @@ def load_llm(
     model_mem_bytes = mem_params + mem_buffers
     model_mem_gb = round(model_mem_bytes/(1024**3), 2)
 
-    print(f"[INFO] Using {llm_model_name} with {num_params} parameters loaded on {model_mem_gb} GB memory on {device}")
+    print(f"[INFO] Using {llm_model_name} on {device} with {num_params} parameters loaded on {model_mem_gb} GB memory")
 
     return tokenizer, llm_model
 
@@ -73,7 +74,7 @@ def get_device() -> (str, str, BitsAndBytesConfig):
         attn_implementation = "sdpa"
 
     print(f"[INFO] Using attn_implementation: {attn_implementation}")
-    print(f"[INFO] Using quantization_config: {quantization_config}")
+    print(f"[INFO] Quantization config used: {quantization_config}")
     return device, attn_implementation, quantization_config
 
 def generate_reply(
@@ -87,13 +88,12 @@ def generate_reply(
     
     context = "- " + "\n- ".join(selected_text)
     base_prompt = f"""Based on the following context items, please answer the query.
-Give yourself room to think by extracting relevant passages from the context before answering thq query.
-Do not return the thinking, only rturn the answer.
+Give yourself room to think by extracting relevant passages from the context before answering the query.
+Do not return the thinking, only return the answer.
 Make sure your answers are as explanatory as possible.
-Use the following context items to unswer query:
+Use the following context items to answer query:
 {context}
 
-Relevant passages: <extract relevant passages from the context here>
 User query: {query}
 Answer:
     """
@@ -125,6 +125,10 @@ Answer:
 
     outputs_decoded = tokenizer.decode(
         outputs[0], 
-        skip_special_tokens = True
+        skip_special_tokens = False
     )
-    return outputs_decoded.replace(prompt, "")
+
+    for code in ["/s", "bos", "eos"]:
+        outputs_decoded = outputs_decoded.strip(f"<{code}>").replace(prompt.strip(f"<{code}>"), "")
+
+    return outputs_decoded.strip(" ")

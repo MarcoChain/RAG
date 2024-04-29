@@ -104,6 +104,13 @@ def __pars_args__():
         default=10, 
         help='Number of papers to download from arvix. Valid only if URL is None (Default 10)'
     )
+
+    parser.add_argument(
+        '--low_cpu_mem_usage', 
+        type=bool, 
+        default=False, 
+        help='(Default False)'
+    )
     
     args = parser.parse_args()
     print("".join(["-"]*10), "\n")
@@ -159,6 +166,7 @@ def main(args):
     tokenizer, llm_model = load_llm(
         llm_model_name = args.llm_model_name,
         attn_implementation = attn_implementation,
+        low_cpu_mem_usage = args.low_cpu_mem_usage,
         quantization_config = quantization_config,
         token = args.token,
         device = device

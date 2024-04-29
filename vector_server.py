@@ -37,7 +37,7 @@ class FaissKNNSearch:
   def retrieve(
       self,
       query: str
-  )-> [np.array, np.array, np.array]:
+  )-> (np.array, np.array, np.array):
 
     _, indices = self.index.search(
         query.astype(np.float32),
