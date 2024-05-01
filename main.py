@@ -1,19 +1,21 @@
-from utils import (
-    check_pdfs_presence,
-    download_single_pdf, 
-    download_pdfs_from_arxiv,
+
+from text_utils import (
     prepare_text,
     open_and_read_pdfs,
-    create_and_store_embeddings,
-    loading_re_ranking_model,
-    retrieve_topk_results,
+    check_pdfs_presence,
+    download_pdfs_from_arxiv,
+    download_single_pdf
 )
 
-from llm_utils import(
+from rag_components_utils import(
     get_device,
-    clean_memory,
     load_llm,
-    generate_reply
+    generate_reply,
+    create_and_store_embeddings,
+    load_re_ranking_model,
+    load_embedding_model,
+    retrieve_topk_results,
+    clean_memory
 )
 
 import argparse
@@ -149,16 +151,21 @@ def main(args):
         min_token_length = args.min_token_length
     )
 
-    faiss_dataset, embedding_model = create_and_store_embeddings(
-        pages_and_chunks_over_min_token_len = pages_and_chunks_over_min_token_len,
+    embedding_model = load_embedding_model(
         embedding_model_name = args.embedding_model_name,
+        device = device
+    )
+
+    faiss_dataset = create_and_store_embeddings(
+        pages_and_chunks_over_min_token_len = pages_and_chunks_over_min_token_len,
+        embedding_model = embedding_model,
         batch_size = args.batch_size,
         csv_path = args.csv_path,
         top_k_context = args.top_k_context,
         device = device
     )
 
-    re_ranking_model = loading_re_ranking_model(
+    re_ranking_model = load_re_ranking_model(
         re_ranking_model_name = args.re_ranking_model_name,
         device = device
     )
@@ -178,7 +185,7 @@ def main(args):
         query = input()
         if query == "quit program":
             break
-        selected_text, selected_pages = retrieve_topk_results(
+        selected_text, _ = retrieve_topk_results(
             query = query,
             faiss_dataset = faiss_dataset,
             embedding_model = embedding_model,
@@ -191,7 +198,6 @@ def main(args):
             tokenizer = tokenizer,
             query = query,
             selected_text = selected_text,
-            selected_pages = selected_pages,
             device = device
         )
 
