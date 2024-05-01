@@ -67,7 +67,7 @@ def __pars_args__():
         '--re_ranking_model_name', 
         type=str, 
         default="mixedbread-ai/mxbai-rerank-large-v1", 
-        help='Model name used to re-rank information retrieved using the query (Default all-mpnet-base-v2)'
+        help='Model name used to re-rank information retrieved using the query (Default mxbai-rerank-large-v1)'
     )
 
     parser.add_argument(
