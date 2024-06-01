@@ -1,11 +1,5 @@
 # RAG
 
-Sure, here's a detailed explanation for your GitHub README on how the RAG (Retrieval-Augmented Generation) system works:
-
----
-
-# Project Name
-
 ## Overview
 
 This project implements a Retrieval-Augmented Generation (RAG) system, a state-of-the-art approach in natural language processing that combines the strengths of retrieval-based and generation-based methods to produce high-quality text generation. 
@@ -67,7 +61,7 @@ An interface created using gradio is available!
 
 Run gradio interface:
    ```bash
-   python main.py
+   python gradio_app.py
    ```
 
 ## Conclusion
