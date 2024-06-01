@@ -56,12 +56,12 @@ tokenizer, llm_model = load_llm(
 )
 
 with gr.Blocks() as demo:
-    gr.Markdown("## Chat with ZAG")
+    gr.Markdown("## Chat with RAG")
     with gr.Column():
         chatbot = gr.Chatbot()
         with gr.Row():
             with gr.Column():
-                message = gr.Textbox(label="Chat Message Box", placeholder="Message ZAG", show_label=False)
+                message = gr.Textbox(label="Chat Message Box", placeholder="Message RAG", show_label=False)
             with gr.Column():
                 with gr.Row():
                     submit = gr.Button("Submit")
@@ -90,7 +90,7 @@ with gr.Blocks() as demo:
             selected_text = selected_text,
             device = device
         )
-        chat_history.append((query, "ZAG:\n" + outputs_decoded))
+        chat_history.append((query, "RAG:\n" + outputs_decoded))
         return "", chat_history
 
     submit.click(respond, [message, chatbot], [message, chatbot], queue=False)
