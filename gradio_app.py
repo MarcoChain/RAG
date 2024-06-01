@@ -1,18 +1,19 @@
 import gradio as gr
-import torch
 
-from utils import (
+from text_utils import (
     prepare_text,
     open_and_read_pdfs,
-    create_and_store_embeddings,
-    loading_re_ranking_model,
-    retrieve_topk_results,
+    
 )
 
-from llm_utils import(
+from rag_components_utils import(
     get_device,
     load_llm,
-    generate_reply
+    generate_reply,
+    create_and_store_embeddings,
+    load_re_ranking_model,
+    load_embedding_model,
+    retrieve_topk_results,
 )
 
 device, attn_implementation, quantization_config = get_device()
@@ -26,16 +27,21 @@ pages_and_chunks_over_min_token_len = prepare_text(
         min_token_length = 30
     )
 
-faiss_dataset, embedding_model = create_and_store_embeddings(
+
+embedding_model = load_embedding_model(
+    embedding_model_name = "all-mpnet-base-v2",
+    device = device
+)
+faiss_dataset = create_and_store_embeddings(
         pages_and_chunks_over_min_token_len = pages_and_chunks_over_min_token_len,
-        embedding_model_name = "all-mpnet-base-v2",
+        embedding_model = embedding_model,
         batch_size = 512,
         csv_path = "./csv",
-        top_k_context =5,
+        top_k_context = 5,
         device = device
     )
 
-re_ranking_model = loading_re_ranking_model(
+re_ranking_model = load_re_ranking_model(
     re_ranking_model_name = "mixedbread-ai/mxbai-rerank-large-v1",
     device = device
 )
@@ -50,12 +56,12 @@ tokenizer, llm_model = load_llm(
 )
 
 with gr.Blocks() as demo:
-    gr.Markdown("## Chat with ZAG")
+    gr.Markdown("## Chat with RAG")
     with gr.Column():
         chatbot = gr.Chatbot()
         with gr.Row():
             with gr.Column():
-                message = gr.Textbox(label="Chat Message Box", placeholder="Message ZAG", show_label=False)
+                message = gr.Textbox(label="Chat Message Box", placeholder="Message RAG", show_label=False)
             with gr.Column():
                 with gr.Row():
                     submit = gr.Button("Submit")
@@ -69,7 +75,7 @@ with gr.Blocks() as demo:
             converted_chat_history += f"<|prompter|>{c[0]}<|endoftext|><|assistant|>{c[1]}<|endoftext|>"
 
         # send request to endpoint
-        selected_text, selected_pages = retrieve_topk_results(
+        selected_text, _ = retrieve_topk_results(
             query = query,
             faiss_dataset = faiss_dataset,
             embedding_model = embedding_model,
@@ -82,10 +88,9 @@ with gr.Blocks() as demo:
             tokenizer = tokenizer,
             query = query,
             selected_text = selected_text,
-            selected_pages = selected_pages,
             device = device
         )
-        chat_history.append((query, outputs_decoded))
+        chat_history.append((query, "RAG:\n" + outputs_decoded))
         return "", chat_history
 
     submit.click(respond, [message, chatbot], [message, chatbot], queue=False)
