@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements a Retrieval-Augmented Generation (RAG) system, a state-of-the-art approach in natural language processing that combines the strengths of retrieval-based and generation-based methods to produce high-quality text generation. 
+This project implements a Retrieval-Augmented Generation (RAG) system, an approach that combines the strengths of retrieval-based and generation-based methods to produce high-quality text generation. This implementation is inspired by the work done from [mrdbourke](https://www.youtube.com/watch?v=qN_2fnOPY-M).
 
 ## How RAG Works
 
